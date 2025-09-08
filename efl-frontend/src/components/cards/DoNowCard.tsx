@@ -9,7 +9,9 @@ interface DoNowCardProps {
 }
 
 export const DoNowCard: React.FC<DoNowCardProps> = ({ card }) => {
-  const { updateCard, removeCard, parkCard } = useStore();
+  const updateCard = useStore(s => s.updateCard);
+  const removeCard = useStore(s => s.removeCard);
+  const parkCard = useStore(s => s.parkCard);
   const [showDiff, setShowDiff] = useState(false);
   const content = card.content as DoNowContent;
 
@@ -27,16 +29,16 @@ export const DoNowCard: React.FC<DoNowCardProps> = ({ card }) => {
 
   const handlePark = async () => {
     const wakeTime = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
-    const parkedItem = await api.parkCard(card.id, wakeTime, 'Parked for later');
+    const result = await api.parkCard(card.id, wakeTime, 'Parked for later');
     await api.logTelemetry('park_created', { card_id: card.id });
     
     parkCard(card.id, {
-      id: parkedItem.id,
+      id: result.card_id || card.id,
       title: content.intent.name,
       wakeTime,
       altitude: 'do',
       originCardId: card.id,
-      wakeConditions: [{ type: 'time', value: wakeTime }],
+      wakeConditions: [{ type: 'time', value: wakeTime } as const],
     });
   };
 

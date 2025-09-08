@@ -7,12 +7,12 @@ use crate::memory::MemoryCache;
 use std::collections::HashMap;
 
 pub struct MemoryService {
-    db_pool: PgPool,
+    db_pool: Option<PgPool>,
     cache: MemoryCache,
 }
 
 impl MemoryService {
-    pub fn new(db_pool: PgPool, cache: MemoryCache) -> Self {
+    pub fn new(db_pool: Option<PgPool>, cache: MemoryCache) -> Self {
         Self { db_pool, cache }
     }
     

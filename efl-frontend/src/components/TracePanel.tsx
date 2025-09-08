@@ -4,7 +4,7 @@ import { useStore } from '../stores/useStore';
 import { useTelemetry } from '../hooks/useTelemetry';
 
 export const TracePanel: React.FC = () => {
-  const { toggleTrace } = useStore();
+  const toggleTrace = useStore((s) => s.toggleTrace);
   const { entries, summary, isLoading, error, refresh } = useTelemetry();
 
   const formatTimestamp = (timestamp: string) => {

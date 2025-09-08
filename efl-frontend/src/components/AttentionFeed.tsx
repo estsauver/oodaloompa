@@ -9,7 +9,10 @@ import { useDemoFeed } from '../hooks/useDemoFeed';
 import { AlertCircle } from 'lucide-react';
 
 export const AttentionFeed: React.FC = () => {
-  const { activeCards, showTrace, isLoading, error } = useStore();
+  const activeCards = useStore(s => s.activeCards);
+  const showTrace = useStore(s => s.showTrace);
+  const isLoading = useStore(s => s.isLoading);
+  const error = useStore(s => s.error);
   useDemoFeed();
 
   return (

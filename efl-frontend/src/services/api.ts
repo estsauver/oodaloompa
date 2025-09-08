@@ -112,4 +112,22 @@ export const api = {
     });
     return response.data;
   },
+
+  // LLM endpoints
+  llmIntents: async (body: { title: string; snippet: string; dod_json: any; recent_json: any }) => {
+    const response = await apiClient.post('/llm/intents', body);
+    return response.data as { intents: { id: string; title: string; altitude: string; rationale: string }[] };
+  },
+  llmSimplify: async (snippet: string) => {
+    const response = await apiClient.post('/llm/transform/simplify', { snippet });
+    return response.data as { rewrite: string; reasoning: string };
+  },
+  llmAmplifyDraft: async (context: any) => {
+    const response = await apiClient.post('/llm/amplify/draft', { context });
+    return response.data as { drafts: { channel: string; subject?: string; body: string; reason: string }[] };
+  },
+  llmOrientRank: async (tasks: any[]) => {
+    const response = await apiClient.post('/llm/orient/rank', { tasks });
+    return response.data as { items: { title: string; urgency: number; impact: number; rationale: string }[] };
+  },
 };

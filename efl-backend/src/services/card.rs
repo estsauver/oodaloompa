@@ -8,11 +8,11 @@ use crate::models::{
 };
 
 pub struct CardService {
-    db_pool: PgPool,
+    db_pool: Option<PgPool>,
 }
 
 impl CardService {
-    pub fn new(db_pool: PgPool) -> Self {
+    pub fn new(db_pool: Option<PgPool>) -> Self {
         Self { db_pool }
     }
     
@@ -55,7 +55,37 @@ impl CardService {
             status: CardStatus::Active,
         };
         
-        // In a real implementation, save to database
+        // v0 persistence: save to SQLite if configured
+        let sqlite_url = std::env::var("SQLITE_URL").ok().or_else(|| {
+            let db = std::env::var("DATABASE_URL").unwrap_or_default();
+            if db.starts_with("sqlite://") { Some(db) } else { None }
+        });
+        if let Some(database_url) = sqlite_url {
+            if database_url.starts_with("sqlite://") {
+                if let Ok(sqlite) = crate::sqlite::db::SqliteDb::connect(&database_url).await {
+                    let repo = crate::sqlite::repo::cards::CardsRepo::new(sqlite.pool);
+                    let payload = serde_json::to_value(&card).unwrap_or(serde_json::json!({}));
+                    let kind = match card.card_type { 
+                        CardType::DoNow => "DoNow",
+                        CardType::Ship => "Ship",
+                        CardType::Amplify => "Amplify",
+                        CardType::Orient => "Orient",
+                        CardType::Parked => "Parked",
+                        CardType::BreakIn => "BreakIn",
+                    };
+                    let state = match card.status {
+                        CardStatus::Active => "Active",
+                        CardStatus::Pending => "Pending",
+                        CardStatus::Completed => "Completed",
+                        CardStatus::Parked => "Parked",
+                        CardStatus::Cancelled => "Cancelled",
+                    };
+                    let _ = repo.upsert(&card.id.to_string(), kind, state, &payload).await;
+                }
+            }
+        }
+
+        // In a real implementation, also save to Postgres
         Ok(card)
     }
     

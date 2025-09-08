@@ -1,6 +1,10 @@
 use async_trait::async_trait;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use reqwest::Client;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+use hex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlackMessage {
@@ -44,4 +48,64 @@ impl SlackConnector for MCPSlackConnector {
         // Return draft without sending
         Ok(format!("Draft: {}", text))
     }
+}
+
+// Simple Web API client for Slack
+#[derive(Clone)]
+pub struct SlackClient {
+    pub client: Client,
+    pub token: String,
+}
+
+impl SlackClient {
+    pub fn from_env() -> Option<Self> {
+        Some(Self {
+            client: Client::new(),
+            token: std::env::var("SLACK_BOT_TOKEN").ok()?,
+        })
+    }
+
+    pub async fn fetch_dm(&self, user_id: &str) -> anyhow::Result<serde_json::Value> {
+        let url = format!("https://slack.com/api/conversations.open");
+        let resp = self.client
+            .post(&url)
+            .bearer_auth(&self.token)
+            .form(&serde_json::json!({"users": user_id}))
+            .send()
+            .await?;
+        let json = resp.json().await?;
+        Ok(json)
+    }
+
+    pub async fn fetch_thread(&self, channel: &str, ts: &str) -> anyhow::Result<serde_json::Value> {
+        let url = format!("https://slack.com/api/conversations.replies?channel={}&ts={}", channel, ts);
+        let resp = self.client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        let json = resp.json().await?;
+        Ok(json)
+    }
+}
+
+// Verify Events API signature
+pub fn verify_signature(secret: &str, timestamp: &str, body: &str, signature: &str) -> bool {
+    if timestamp.is_empty() || signature.is_empty() { return false; }
+    let basestring = format!("v0:{}:{}", timestamp, body);
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(basestring.as_bytes());
+    let result = mac.finalize();
+    let hash = hex::encode(result.into_bytes());
+    let expected = format!("v0={}", hash);
+    subtle_eq(&expected, signature)
+}
+
+fn subtle_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() { return false; }
+    let mut diff = 0u8;
+    for (x, y) in a.bytes().zip(b.bytes()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }

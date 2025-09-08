@@ -4,11 +4,11 @@ use anyhow::Result;
 use crate::models::{TraceEntry, TelemetryEvent};
 
 pub struct TraceService {
-    db_pool: PgPool,
+    db_pool: Option<PgPool>,
 }
 
 impl TraceService {
-    pub fn new(db_pool: PgPool) -> Self {
+    pub fn new(db_pool: Option<PgPool>) -> Self {
         Self { db_pool }
     }
     

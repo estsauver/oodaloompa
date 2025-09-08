@@ -1,5 +1,5 @@
 import React from 'react';
-import { Ship, Check, X } from 'lucide-react';
+import { Ship, Check } from 'lucide-react';
 import type { Card, ShipContent } from '../../types/index';
 import { DoDChip } from '../DoDChip';
 import { api } from '../../services/api';

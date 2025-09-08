@@ -3,11 +3,11 @@ use anyhow::Result;
 use crate::models::{Card, Altitude};
 
 pub struct FeedService {
-    db_pool: PgPool,
+    db_pool: Option<PgPool>,
 }
 
 impl FeedService {
-    pub fn new(db_pool: PgPool) -> Self {
+    pub fn new(db_pool: Option<PgPool>) -> Self {
         Self { db_pool }
     }
     

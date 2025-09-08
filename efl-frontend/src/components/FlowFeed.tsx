@@ -2,22 +2,36 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../stores/useStore';
 import { Card } from './Card';
 import { CommandBar } from './CommandBar';
-import { AltitudeToggle } from './AltitudeToggle';
+import { Altimeter } from './Altimeter';
 import { ParkingShelf } from './ParkingShelf';
 import { TracePanel } from './TracePanel';
 import { useDemoFeed } from '../hooks/useDemoFeed';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 import { useInfiniteStream } from '../hooks/useInfiniteStream';
+import { useAltimeterProgress } from '../hooks/useAltimeterProgress';
+import { useAltimeterKeyboard } from '../hooks/useAltimeterKeyboard';
 import { AlertCircle, ChevronLeft, ChevronRight, Sparkles, SkipForward, Clock, Activity } from 'lucide-react';
-import type { Card as CardType } from '../types';
 
 export const FlowFeed: React.FC = () => {
-  const { activeCards, showTrace, isLoading, error, removeCard, parkCard } = useStore();
+  // Select each slice separately to keep getSnapshot stable
+  const activeCards = useStore(s => s.activeCards);
+  const showTrace = useStore(s => s.showTrace);
+  const isLoading = useStore(s => s.isLoading);
+  const error = useStore(s => s.error);
+  const removeCard = useStore(s => s.removeCard);
+  const parkCard = useStore(s => s.parkCard);
+  const systemAltitude = useStore(s => s.systemAltitude);
+  const altimeterMode = useStore(s => s.altimeterMode);
+  const altimeterProgress = useStore(s => s.altimeterProgress);
+  const setAltitude = useStore(s => s.setAltitude);
+  const setAltimeterMode = useStore(s => s.setAltimeterMode);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   
   useDemoFeed();
   useInfiniteStream(); // Automatically generate more cards as needed
+  useAltimeterProgress(); // Calculate and update altimeter progress
+  useAltimeterKeyboard(); // Enable keyboard shortcuts for altitude control
 
   const prevLength = useRef(activeCards.length);
   
@@ -80,11 +94,11 @@ export const FlowFeed: React.FC = () => {
           parkCard(currentCard.id, {
             id: currentCard.id,
             title: currentCard.title,
-            wakeTime,
+            wakeTime: wakeTime.toISOString(),
             altitude: currentCard.altitude,
             originCardId: currentCard.id,
             context: 'Parked for later review',
-            wakeConditions: [{ type: 'time', value: wakeTime }],
+            wakeConditions: [{ type: 'time', value: wakeTime.toISOString() }],
           });
           break;
       }
@@ -134,7 +148,33 @@ export const FlowFeed: React.FC = () => {
                 </svg>
                 Trace
               </button>
-              <AltitudeToggle />
+              <Altimeter
+                systemAltitude={systemAltitude}
+                mode={altimeterMode}
+                progress={altimeterProgress}
+                onBump={(altitude, source) => {
+                  setAltitude(altitude, source);
+                  // Scroll to first card of this altitude
+                  const altitudeCards = activeCards.filter(c => {
+                    const cardAltitude = c.altitude === 'do' ? 'Do' : 
+                                       c.altitude === 'ship' ? 'Ship' :
+                                       c.altitude === 'amplify' ? 'Amplify' : 'Orient';
+                    return cardAltitude === altitude;
+                  });
+                  if (altitudeCards.length > 0) {
+                    const cardIndex = activeCards.indexOf(altitudeCards[0]);
+                    setIsTransitioning(true);
+                    setTimeout(() => {
+                      setCurrentIndex(cardIndex);
+                      setIsTransitioning(false);
+                    }, 150);
+                  }
+                }}
+                onModeToggle={setAltimeterMode}
+                onRationaleRequest={(from, to) => {
+                  console.log(`Rationale request: ${from} -> ${to}`);
+                }}
+              />
             </div>
           </div>
         </header>

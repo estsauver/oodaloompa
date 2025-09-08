@@ -4,7 +4,8 @@ import { useStore } from '../stores/useStore';
 import { useEffect } from 'react';
 
 export const useIntentPalette = (activeObjectId?: string, objectType?: string) => {
-  const { setIntentPalette, setError } = useStore();
+  const setIntentPalette = useStore(s => s.setIntentPalette);
+  const setError = useStore(s => s.setError);
 
   const query = useQuery({
     queryKey: ['palette', activeObjectId, objectType],

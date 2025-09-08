@@ -43,7 +43,27 @@ impl ParkingService {
         // Store in parked collection
         let mut parked = self.parked_cards.write().await;
         parked.insert(original_card_id, (card, wake_time, reason));
-        
+
+        // Persist wake in SQLite v0 if configured
+        let sqlite_url = std::env::var("SQLITE_URL").ok().or_else(|| {
+            let db = std::env::var("DATABASE_URL").unwrap_or_default();
+            if db.starts_with("sqlite://") { Some(db) } else { None }
+        });
+        if let Some(database_url) = sqlite_url {
+            if database_url.starts_with("sqlite://") {
+                if let Ok(sqlite) = crate::sqlite::db::SqliteDb::connect(&database_url).await {
+                    let repo = crate::sqlite::repo::wakes::WakesRepo::new(sqlite.pool);
+                    let _ = repo
+                        .schedule_time_wake(
+                            &original_card_id.to_string(),
+                            &wake_time.to_rfc3339(),
+                            "time",
+                        )
+                        .await;
+                }
+            }
+        }
+
         Ok(original_card_id)
     }
     

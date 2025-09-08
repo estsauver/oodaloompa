@@ -5,11 +5,11 @@ use chrono::Utc;
 use crate::models::{Intent, IntentPalette, ContextSignals, IntentType};
 
 pub struct IntentService {
-    db_pool: PgPool,
+    db_pool: Option<PgPool>,
 }
 
 impl IntentService {
-    pub fn new(db_pool: PgPool) -> Self {
+    pub fn new(db_pool: Option<PgPool>) -> Self {
         Self { db_pool }
     }
     

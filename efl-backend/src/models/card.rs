@@ -107,7 +107,7 @@ pub struct DoDChip {
     pub fix_suggestion: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ChipStatus {
     Green,

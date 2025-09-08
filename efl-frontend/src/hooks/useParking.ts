@@ -9,7 +9,10 @@ interface ParkOptions {
 }
 
 export const useParking = () => {
-  const { parkCard, unparkItem, parkedItems } = useStore();
+  const parkCard = useStore(s => s.parkCard);
+  const unparkItem = useStore(s => s.unparkItem);
+  const parkedItems = useStore(s => s.parkedItems);
+  const setParkedItems = useStore(s => s.setParkedItems);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,16 +46,18 @@ export const useParking = () => {
       
       // Create parked item for local state
       const parkedItem: ParkedItem = {
-        id: card.id,
+        id: result.card_id || card.id,
         title: card.title,
-        wakeTime: wakeTime,
+        wakeTime: wakeTime.toISOString(),
         altitude: card.altitude,
         originCardId: card.id,
         context: options.reason,
-        wakeConditions: [{
-          type: 'time',
-          value: wakeTime,
-        }],
+        wakeConditions: [
+          {
+            type: 'time',
+            value: wakeTime.toISOString(),
+          } as const,
+        ],
       };
       
       parkCard(card.id, parkedItem);
@@ -116,8 +121,13 @@ export const useParking = () => {
       // Update local state with new wake time
       const parkedItem = parkedItems.find(item => item.id === itemId);
       if (parkedItem) {
-        const newWakeTime = new Date(parkedItem.wakeTime.getTime() + minutes * 60000);
-        // Would update the parked item in store here
+        const newWakeTime = new Date(new Date(parkedItem.wakeTime).getTime() + minutes * 60000).toISOString();
+        const updated = parkedItems.map(item => item.id === itemId ? {
+          ...item,
+          wakeTime: newWakeTime,
+          wakeConditions: [{ type: 'time', value: newWakeTime } as const],
+        } : item);
+        setParkedItems(updated);
       }
       
       return true;
@@ -128,7 +138,7 @@ export const useParking = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [parkedItems]);
+  }, [parkedItems, setParkedItems]);
 
   return {
     park,

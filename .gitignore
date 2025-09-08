@@ -60,3 +60,6 @@ Cargo.lock
 
 # OS
 Thumbs.db
+
+# Temporary files
+.tmp*

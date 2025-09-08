@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { useStore } from '../stores/useStore';
-import { api } from '../services/api';
 import type { ParkedItem } from '../types';
 
 export const useDemoFeed = () => {
-  const { setLoading, setError, addCard, setParkedItems } = useStore();
+  const setLoading = useStore(s => s.setLoading);
+  const setError = useStore(s => s.setError);
+  const addCard = useStore(s => s.addCard);
+  const setParkedItems = useStore(s => s.setParkedItems);
 
   useEffect(() => {
     const loadDemoFeed = async () => {
@@ -24,6 +26,7 @@ export const useDemoFeed = () => {
               switch (card.content.type) {
                 case 'ship':
                   formattedContent = {
+                    type: 'ship',
                     dodChips: card.content.dod_chips?.map((chip: any) => ({
                       ...chip,
                       fixSuggestion: chip.fix_suggestion,
@@ -33,6 +36,7 @@ export const useDemoFeed = () => {
                   break;
                 case 'do_now':
                   formattedContent = {
+                    type: 'do_now',
                     intent: card.content.intent,
                     preview: card.content.preview,
                     diff: card.content.diff,
@@ -40,6 +44,7 @@ export const useDemoFeed = () => {
                   break;
                 case 'amplify':
                   formattedContent = {
+                    type: 'amplify',
                     suggestions: card.content.suggestions,
                     drafts: card.content.drafts?.map((draft: any) => ({
                       ...draft,
@@ -49,6 +54,7 @@ export const useDemoFeed = () => {
                   break;
                 case 'orient':
                   formattedContent = {
+                    type: 'orient',
                     nextTasks: card.content.next_tasks?.map((task: any) => ({
                       ...task,
                       urgencyScore: task.urgency_score,
@@ -58,6 +64,7 @@ export const useDemoFeed = () => {
                   break;
                 case 'break_in':
                   formattedContent = {
+                    type: 'break_in',
                     source: card.content.source,
                     message: card.content.message,
                     sender: card.content.sender,
@@ -66,6 +73,7 @@ export const useDemoFeed = () => {
                   break;
                 case 'parked':
                   formattedContent = {
+                    type: 'parked',
                     originalCardId: card.content.original_card_id,
                     wakeTime: card.content.wake_time,
                     wakeReason: card.content.wake_reason,
@@ -90,11 +98,16 @@ export const useDemoFeed = () => {
           const parkedItems: ParkedItem[] = data.parked_items.map((item: any) => ({
             id: item.id,
             title: item.title,
-            wakeTime: new Date(item.wake_time),
+            wakeTime: new Date(item.wake_time).toISOString(),
             altitude: item.altitude,
             originCardId: item.origin_card_id,
             context: item.context,
-            wakeConditions: item.wake_conditions || [],
+            wakeConditions: (item.wake_conditions || []).map((wc: any) => {
+              if (wc.type === 'time' || wc.type === 'event' || wc.type === 'memory_change') {
+                return wc as ParkedItem['wakeConditions'][number];
+              }
+              return { type: 'time', value: item.wake_time } as ParkedItem['wakeConditions'][number];
+            }),
           }));
           setParkedItems(parkedItems);
         }

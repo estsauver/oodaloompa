@@ -4,8 +4,9 @@ import type { Card } from '../types';
 
 // Simulates an infinite stream of work by generating cards when queue gets low
 export const useInfiniteStream = () => {
-  const { activeCards, addCard } = useStore();
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const activeCards = useStore(s => s.activeCards);
+  const addCard = useStore(s => s.addCard);
+  const timeoutRef = useRef<number | null>(null);
 
   const generateNextCard = () => {
     const cardTypes = [
@@ -73,12 +74,12 @@ export const useInfiniteStream = () => {
           rationale: 'Continuous improvement suggestion',
           preconditions: [],
           estimatedTokens: 500,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         preview: `AI-generated suggestion: ${category.descriptions[titleIdx]}`,
       } as any,
-      actions: ['commit', 'park', 'skip'],
-      createdAt: new Date(),
+      actions: ['commit', 'park'] as any,
+      createdAt: new Date().toISOString(),
       status: 'active',
     };
 
@@ -98,8 +99,9 @@ export const useInfiniteStream = () => {
     }
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, [activeCards.length]);

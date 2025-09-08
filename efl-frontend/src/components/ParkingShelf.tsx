@@ -46,7 +46,7 @@ export const ParkingShelf: React.FC = () => {
             <span className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded-full">
               {parkedItems.length} parked
             </span>
-            {parkedItems.some(item => isOverdue(item.wakeTime)) && (
+            {parkedItems.some(item => isOverdue(new Date(item.wakeTime))) && (
               <span className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded-full animate-pulse">
                 Items ready to wake
               </span>
@@ -68,7 +68,7 @@ export const ParkingShelf: React.FC = () => {
         {isExpanded && (
           <div className="flex gap-3 overflow-x-auto pb-2">
             {parkedItems.map((item) => {
-              const overdue = isOverdue(item.wakeTime);
+              const overdue = isOverdue(new Date(item.wakeTime));
               return (
                 <div
                   key={item.id}

@@ -4,6 +4,9 @@ mod handlers;
 mod db;
 mod connectors;
 mod memory;
+mod sqlite;
+mod llm;
+mod sse;
 
 use axum::{
     Router,
@@ -14,13 +17,15 @@ use axum::{
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tokio::sync::broadcast;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db_pool: sqlx::PgPool,
+    pub db_pool: Option<sqlx::PgPool>,
     pub memory_cache: memory::MemoryCache,
     pub parking_service: services::parking::ParkingService,
     pub telemetry_service: services::telemetry::TelemetryService,
+    pub sse_tx: broadcast::Sender<crate::sse::SseEvent>,
 }
 
 #[tokio::main]
@@ -37,19 +42,28 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://localhost/efl_db".to_string());
-    
-    let db_pool = sqlx::postgres::PgPoolOptions::new()
+    // Try to connect to Postgres; if it fails, continue without PG (SQLite-only dev)
+    let db_pool = match sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
-        .await?;
-    
-    sqlx::migrate!("./migrations")
-        .run(&db_pool)
-        .await?;
+        .await
+    {
+        Ok(pool) => {
+            if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
+                tracing::warn!("PG migrations failed: {}", e);
+            }
+            Some(pool)
+        }
+        Err(e) => {
+            tracing::warn!("Postgres connect failed: {}. Continuing in SQLite-only mode.", e);
+            None
+        }
+    };
     
     let memory_cache = memory::MemoryCache::new();
     let parking_service = services::parking::ParkingService::new();
     let telemetry_service = services::telemetry::TelemetryService::new();
+    let (sse_tx, _sse_rx) = broadcast::channel(100);
     
     // Generate demo telemetry
     let telemetry_clone = telemetry_service.clone();
@@ -62,6 +76,7 @@ async fn main() -> anyhow::Result<()> {
         memory_cache,
         parking_service,
         telemetry_service,
+        sse_tx,
     };
     
     let app = create_router(app_state);
@@ -87,9 +102,15 @@ fn api_routes() -> Router<AppState> {
         .nest("/intents", handlers::intent::routes())
         .nest("/cards", handlers::card::routes())
         .nest("/feed", handlers::feed::routes())
+        .nest("/stream", handlers::stream::routes())
+        .nest("/slack", handlers::slack::routes())
+        .nest("/slack-map", handlers::slack_map::routes())
+        .nest("/gmail", handlers::gmail::routes())
         .nest("/memory", handlers::memory::routes())
         .nest("/trace", handlers::trace::routes())
         .nest("/telemetry", handlers::telemetry::routes())
+        .nest("/llm", handlers::llm::routes())
+        .nest("/health", handlers::health_db::routes())
         .route("/health", axum::routing::get(health_check))
 }
 

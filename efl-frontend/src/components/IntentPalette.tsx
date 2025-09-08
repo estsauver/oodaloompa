@@ -5,9 +5,10 @@ import { api } from '../services/api';
 import { useIntentPalette } from '../hooks/useIntentPalette';
 
 export const IntentPalette: React.FC = () => {
-  const { intentPalette, addCard } = useStore();
+  const intentPalette = useStore(s => s.intentPalette);
+  const addCard = useStore(s => s.addCard);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [activeObjectType, setActiveObjectType] = React.useState('text');
+  const [activeObjectType] = React.useState('text');
 
   const { isLoading } = useIntentPalette(undefined, activeObjectType);
 

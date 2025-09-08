@@ -2,22 +2,23 @@ import React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useStore } from '../stores/useStore';
 import { api } from '../services/api';
-import type { Altitude } from '../types';
+import type { Altitude } from './Altimeter';
 
 export const AltitudeToggle: React.FC = () => {
-  const { currentAltitude, setAltitude } = useStore();
+  const currentAltitude = useStore(s => s.currentAltitude);
+  const setAltitude = useStore(s => s.setAltitude);
 
-  const altitudes: Altitude[] = ['do', 'ship', 'amplify', 'orient'];
+  const altitudes: Altitude[] = ['Do', 'Ship', 'Amplify', 'Orient'];
   const altitudeLabels = {
-    do: 'Do',
-    ship: 'Ship',
-    amplify: 'Amplify',
-    orient: 'Orient',
-  };
+    Do: 'Do',
+    Ship: 'Ship',
+    Amplify: 'Amplify',
+    Orient: 'Orient',
+  } as const;
 
   const handleAltitudeChange = async (altitude: Altitude) => {
-    setAltitude(altitude);
-    await api.setAltitude(altitude);
+    setAltitude(altitude, 'user');
+    await api.setAltitude(altitude.toLowerCase() as any);
   };
 
   return (

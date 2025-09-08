@@ -1,13 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Command, ArrowRight, Zap, FileText, Users, Target } from 'lucide-react';
+import { Sparkles, Command, Zap, FileText, Users, Target } from 'lucide-react';
 import { useStore } from '../stores/useStore';
+import { api } from '../services/api';
 
 export const CommandBar: React.FC = () => {
   const [input, setInput] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [llmSuggestions, setLlmSuggestions] = useState<{ id: string; title: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addCard } = useStore();
+  const addCard = useStore(state => state.addCard);
+  const workingSet = useStore(state => state.workingSet);
+  const llmLoadedRef = useRef(false);
 
   // Quick action suggestions based on input
   useEffect(() => {
@@ -38,25 +42,47 @@ export const CommandBar: React.FC = () => {
     }
   }, [input]);
 
+  // Prefetch LLM Intent suggestions when focused once
+  useEffect(() => {
+    const fetchIntents = async () => {
+      try {
+        const title = workingSet?.activeDoc?.title || 'Active Document';
+        const content = workingSet?.activeDoc?.content || '';
+        const snippet = content.slice(0, 400);
+        const dod_json = { chips: [] };
+        const recent_json = { actions: [] };
+        const res = await api.llmIntents({ title, snippet, dod_json, recent_json });
+        setLlmSuggestions(res.intents.map(i => ({ id: i.id, title: i.title })));
+      } catch (e) {
+        // Silent fallback to heuristics
+        setLlmSuggestions([]);
+      }
+    };
+    if (isFocused && !llmLoadedRef.current) {
+      llmLoadedRef.current = true;
+      fetchIntents();
+    }
+  }, [isFocused, workingSet]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
     // Simulate AI processing the request
-    const processingMessages = [
-      'Understanding your request...',
-      'Analyzing context...',
-      'Generating action...',
-    ];
+    // Processing messages (not used in current implementation)
+    // const processingMessages = [
+    //   'Understanding your request...',
+    //   'Analyzing context...',
+    //   'Generating action...',
+    // ];
 
     // Determine card type and urgency based on input
     const lowerInput = input.toLowerCase();
     let cardType: 'do_now' | 'break_in' | 'orient' = 'do_now';
-    let urgency = 'normal';
+    const isUrgent = lowerInput.includes('urgent') || lowerInput.includes('asap') || lowerInput.includes('now');
     
-    if (lowerInput.includes('urgent') || lowerInput.includes('asap') || lowerInput.includes('now')) {
+    if (isUrgent) {
       cardType = 'break_in';
-      urgency = 'high';
     } else if (lowerInput.includes('review') || lowerInput.includes('check') || lowerInput.includes('what')) {
       cardType = 'orient';
     }
@@ -93,11 +119,13 @@ export const CommandBar: React.FC = () => {
       altitude: cardType === 'orient' ? 'orient' as const : 'do' as const,
       title: input,
       content: cardType === 'break_in' ? {
+        type: 'break_in' as const,
         source: 'Command Bar',
         message: input,
         sender: 'You (Manual Entry)',
-        urgency: 'high',
+        urgency: 'high' as const,
       } : cardType === 'orient' ? {
+        type: 'orient' as const,
         nextTasks: [{
           id: `task-${Date.now()}`,
           title: input,
@@ -106,6 +134,7 @@ export const CommandBar: React.FC = () => {
           impactScore: 1.0,
         }],
       } : {
+        type: 'do_now' as const,
         intent: {
           id: `intent-${Date.now()}`,
           name: input,
@@ -114,7 +143,7 @@ export const CommandBar: React.FC = () => {
           rationale: `Manually triggered: "${input}" - Analyzing context and generating appropriate action...`,
           preconditions: [],
           estimatedTokens: 500,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         preview: `AI is analyzing: "${input}" and will generate the appropriate transformation.`,
         diff: {
@@ -125,13 +154,12 @@ export const CommandBar: React.FC = () => {
       },
       actions: ['commit', 'undo', 'park'],
       originObject: generateContext(),
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
       status: 'active' as const,
     };
 
     // Add to front of queue since user wants to do it NOW
-    const currentCards = useStore.getState().activeCards;
-    useStore.setState({ activeCards: [newCard, ...currentCards] });
+    addCard(newCard as any);
     setInput('');
     setSuggestions([]);
   };
@@ -193,23 +221,44 @@ export const CommandBar: React.FC = () => {
       </form>
 
       {/* Suggestions dropdown */}
-      {suggestions.length > 0 && isFocused && (
+      {(llmSuggestions.length > 0 || suggestions.length > 0) && isFocused && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50">
-          <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-100">
-            Suggestions
-          </div>
-          {suggestions.map((suggestion, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSuggestionClick(suggestion)}
-              className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors flex items-center gap-3 group"
-            >
-              <Zap className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
-              <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                {suggestion}
-              </span>
-            </button>
-          ))}
+          {llmSuggestions.length > 0 && (
+            <>
+              <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-100 flex items-center gap-2">
+                <Sparkles className="w-3 h-3 text-blue-500" /> Intent Suggestions
+              </div>
+              {llmSuggestions.map((s, idx) => (
+                <button
+                  key={`llm-${idx}`}
+                  onClick={() => handleSuggestionClick(s.title)}
+                  className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors flex items-center gap-3 group"
+                >
+                  <Sparkles className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm text-gray-700 group-hover:text-gray-900">{s.title}</span>
+                </button>
+              ))}
+            </>
+          )}
+          {suggestions.length > 0 && (
+            <>
+              <div className="px-3 py-2 text-xs font-medium text-gray-500 border-t border-gray-100">
+                Suggestions
+              </div>
+              {suggestions.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors flex items-center gap-3 group"
+                >
+                  <Zap className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+                  <span className="text-sm text-gray-700 group-hover:text-gray-900">
+                    {suggestion}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
 
