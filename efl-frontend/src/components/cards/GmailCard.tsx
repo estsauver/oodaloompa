@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Card } from '../../types';
 import { Mail, Reply, Archive, Clock, Send, X } from 'lucide-react';
 
@@ -10,6 +10,11 @@ interface GmailCardProps {
 export const GmailCard: React.FC<GmailCardProps> = ({ card, onAction }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showCompose, setShowCompose] = useState(false);
+  const [holdProgress, setHoldProgress] = useState<number | null>(null);
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const holdStartRef = useRef<number | null>(null);
+  const holdKeyRef = useRef<string | null>(null);
   
   // Extract email metadata
   const metadata = card.metadata;
@@ -38,15 +43,59 @@ export const GmailCard: React.FC<GmailCardProps> = ({ card, onAction }) => {
   
   // Keyboard shortcuts
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle if this card is focused/active
       if (!document.querySelector('.gmail-card-active')) return;
       
-      switch(e.key.toLowerCase()) {
+      const key = e.key.toLowerCase();
+      
+      // Handle hold-to-send for number keys
+      if (showTemplates && ['1', '2', '3'].includes(e.key) && replyTemplates.length >= parseInt(e.key)) {
+        if (!e.metaKey && !e.ctrlKey && !holdStartRef.current) {
+          e.preventDefault();
+          const idx = parseInt(e.key) - 1;
+          setSelectedTemplate(idx);
+          holdStartRef.current = Date.now();
+          holdKeyRef.current = e.key;
+          
+          // Start hold timer
+          const updateProgress = () => {
+            if (holdStartRef.current) {
+              const elapsed = Date.now() - holdStartRef.current;
+              const progress = Math.min(elapsed / 800, 1); // 800ms hold time
+              setHoldProgress(progress);
+              
+              if (progress >= 1) {
+                // Send the email
+                onAction('reply', { template: replyTemplates[idx], send: true });
+                setShowTemplates(false);
+                setHoldProgress(null);
+                holdStartRef.current = null;
+                holdKeyRef.current = null;
+              } else {
+                holdTimerRef.current = setTimeout(updateProgress, 16);
+              }
+            }
+          };
+          updateProgress();
+        }
+        return;
+      }
+      
+      switch(key) {
         case 'r':
           if (!e.metaKey && !e.ctrlKey) {
             e.preventDefault();
             setShowTemplates(!showTemplates);
+            setShowCompose(false);
+          }
+          break;
+        case 'c':
+          if (!e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            setShowCompose(true);
+            setShowTemplates(false);
+            onAction('compose');
           }
           break;
         case 'a':
@@ -67,29 +116,43 @@ export const GmailCard: React.FC<GmailCardProps> = ({ card, onAction }) => {
             onAction('open');
           }
           break;
-        case '1':
-        case '2':
-        case '3':
-          if (showTemplates && replyTemplates.length >= parseInt(e.key)) {
-            e.preventDefault();
-            const idx = parseInt(e.key) - 1;
-            setSelectedTemplate(idx);
-            onAction('reply', { template: replyTemplates[idx] });
-            setShowTemplates(false);
-          }
-          break;
         case 'escape':
-          if (showTemplates) {
+          if (showTemplates || showCompose) {
             e.preventDefault();
             setShowTemplates(false);
+            setShowCompose(false);
             setSelectedTemplate(null);
+            setHoldProgress(null);
           }
           break;
       }
     };
     
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Cancel hold if key is released early
+      if (holdKeyRef.current === e.key && holdStartRef.current) {
+        const elapsed = Date.now() - holdStartRef.current;
+        if (elapsed < 800) {
+          // Key released too early, just preview
+          if (holdTimerRef.current) {
+            clearTimeout(holdTimerRef.current);
+          }
+          setHoldProgress(null);
+          holdStartRef.current = null;
+          holdKeyRef.current = null;
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      if (holdTimerRef.current) {
+        clearTimeout(holdTimerRef.current);
+      }
+    };
   }, [showTemplates, replyTemplates, onAction]);
   
   // Category color
@@ -193,38 +256,47 @@ export const GmailCard: React.FC<GmailCardProps> = ({ card, onAction }) => {
             {replyTemplates.slice(0, 3).map((template, idx) => (
               <button
                 key={idx}
+                onMouseDown={() => {
+                  setSelectedTemplate(idx);
+                }}
                 onClick={() => {
                   setSelectedTemplate(idx);
                   onAction('reply', { template });
                   setShowTemplates(false);
                 }}
-                className={`w-full text-left p-3 rounded-lg border transition-all ${
+                className={`w-full text-left p-3 rounded-lg border transition-all relative overflow-hidden ${
                   selectedTemplate === idx 
                     ? 'border-blue-400 bg-blue-50' 
                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                <div className="flex items-start justify-between">
+                {selectedTemplate === idx && holdProgress !== null && (
+                  <div 
+                    className="absolute inset-0 bg-blue-400 opacity-20"
+                    style={{ width: `${holdProgress * 100}%` }}
+                  />
+                )}
+                <div className="flex items-start justify-between relative">
                   <p className="text-sm text-gray-700 flex-1">{template}</p>
-                  <kbd className="ml-2 text-xs bg-gray-100 px-1.5 py-0.5 rounded">
-                    {idx + 1}
-                  </kbd>
+                  <div className="ml-2 flex items-center gap-1">
+                    <kbd className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">
+                      {idx + 1}
+                    </kbd>
+                    {selectedTemplate === idx && holdProgress !== null && (
+                      <span className="text-xs text-blue-600 font-medium">
+                        {holdProgress < 1 ? 'Hold to send...' : 'Sending!'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
             ))}
           </div>
           
           <div className="mt-3 pt-3 border-t border-gray-200">
-            <button
-              onClick={() => {
-                onAction('compose');
-                setShowTemplates(false);
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              <Send className="w-4 h-4" />
-              Write Custom Reply
-            </button>
+            <p className="text-xs text-gray-500 mb-2 text-center">
+              Hold number key to send • Press C for custom reply
+            </p>
           </div>
         </div>
       )}
@@ -232,6 +304,7 @@ export const GmailCard: React.FC<GmailCardProps> = ({ card, onAction }) => {
       {/* Keyboard shortcuts hint */}
       <div className="mt-4 text-xs text-gray-500 text-center">
         Press <kbd className="px-1 bg-gray-100 rounded">R</kbd> to reply • 
+        <kbd className="px-1 bg-gray-100 rounded mx-1">C</kbd> for custom • 
         <kbd className="px-1 bg-gray-100 rounded mx-1">A</kbd> to archive • 
         <kbd className="px-1 bg-gray-100 rounded mx-1">P</kbd> to park • 
         <kbd className="px-1 bg-gray-100 rounded mx-1">O</kbd> to open

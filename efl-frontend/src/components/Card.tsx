@@ -8,6 +8,7 @@ import { ParkedCard } from './cards/ParkedCard';
 import { BreakInCard } from './cards/BreakInCard';
 import { GmailCard } from './cards/GmailCard';
 import { ContextFrame } from './ContextFrame';
+import { useStore } from '../stores/useStore';
 
 interface CardProps {
   card: CardType;
@@ -17,6 +18,8 @@ interface CardProps {
 export const Card: React.FC<CardProps> = ({ card, showContext = true }) => {
   // Check if this is a Gmail card
   const isGmailCard = card.originObject?.docId?.startsWith('gmail_');
+  const removeCard = useStore((state) => state.removeCard);
+  const parkCard = useStore((state) => state.parkCard);
   
   const handleCardAction = (action: string, data?: any) => {
     console.log('Card action:', action, data);
@@ -36,7 +39,37 @@ export const Card: React.FC<CardProps> = ({ card, showContext = true }) => {
       return;
     }
     
-    // TODO: Implement other action handlers
+    // Handle archive action
+    if (action === 'archive') {
+      // Remove the card from the active cards list
+      removeCard(card.id);
+      // Log telemetry for archiving
+      console.log(`Card ${card.id} archived`);
+      return;
+    }
+    
+    // Handle park action  
+    if (action === 'park') {
+      // Park the card for later
+      // Default to 1 hour from now
+      const wakeTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      parkCard(card.id, wakeTime, 'Parked from Gmail card');
+      return;
+    }
+    
+    // Handle reply action
+    if (action === 'reply' && data?.template) {
+      console.log('Reply with template:', data.template);
+      // TODO: Implement reply functionality
+      return;
+    }
+    
+    // Handle compose action
+    if (action === 'compose') {
+      console.log('Compose custom reply');
+      // TODO: Implement compose functionality
+      return;
+    }
   };
   
   const renderCardContent = () => {
