@@ -28,7 +28,12 @@ pub async fn post_intents(State(_app): State<AppState>, Json(body): Json<Intents
         body.recent_json
     );
     // Use mock provider for offline dev; swap to real provider with env
-    let provider = llm::providers::mock::MockProvider;
+    // Use DSPy provider by default, unless explicitly disabled
+    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        Box::new(llm::providers::dspy::DspyProvider::new())
+    } else {
+        Box::new(llm::providers::mock::MockProvider)
+    };
     let out: Result<IntentsResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
@@ -45,7 +50,12 @@ struct SimplifyResp { rewrite: String, reasoning: String }
 pub async fn post_transform_simplify(State(_app): State<AppState>, Json(body): Json<SimplifyReq>) -> impl IntoResponse {
     let system = include_str!("../llm/prompts/transform_simplify.md");
     let user = format!("{}", body.snippet);
-    let provider = llm::providers::mock::MockProvider;
+    // Use DSPy provider by default, unless explicitly disabled
+    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        Box::new(llm::providers::dspy::DspyProvider::new())
+    } else {
+        Box::new(llm::providers::mock::MockProvider)
+    };
     let out: Result<SimplifyResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
@@ -62,7 +72,12 @@ struct AmplifyResp { drafts: Vec<llm::AmplifyDraft> }
 pub async fn post_amplify_draft(State(_app): State<AppState>, Json(_body): Json<AmplifyReq>) -> impl IntoResponse {
     let system = include_str!("../llm/prompts/amplify_draft.md");
     let user = String::from("Generate drafts");
-    let provider = llm::providers::mock::MockProvider;
+    // Use DSPy provider by default, unless explicitly disabled
+    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        Box::new(llm::providers::dspy::DspyProvider::new())
+    } else {
+        Box::new(llm::providers::mock::MockProvider)
+    };
     let out: Result<AmplifyResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
@@ -79,7 +94,12 @@ struct OrientResp { items: Vec<llm::OrientItem> }
 pub async fn post_orient_rank(State(_app): State<AppState>, Json(_body): Json<OrientReq>) -> impl IntoResponse {
     let system = include_str!("../llm/prompts/orient_ranking.md");
     let user = String::from("Rank tasks");
-    let provider = llm::providers::mock::MockProvider;
+    // Use DSPy provider by default, unless explicitly disabled
+    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        Box::new(llm::providers::dspy::DspyProvider::new())
+    } else {
+        Box::new(llm::providers::mock::MockProvider)
+    };
     let out: Result<OrientResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),

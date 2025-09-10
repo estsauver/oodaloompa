@@ -1,0 +1,9 @@
+dspy-ai
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+litellm
+python-dotenv
+httpx
+redis
+typing-extensions

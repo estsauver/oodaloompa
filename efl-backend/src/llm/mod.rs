@@ -16,6 +16,7 @@ pub mod json;
 pub mod providers {
     pub mod openai;
     pub mod mock;
+    pub mod dspy;
 }
 
 // Intent suggestions returned by the LLM
