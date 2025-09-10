@@ -53,6 +53,7 @@ impl CardService {
             origin_object: None,
             created_at: Utc::now(),
             status: CardStatus::Active,
+            metadata: None,
         };
         
         // v0 persistence: save to SQLite if configured

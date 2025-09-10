@@ -49,6 +49,7 @@ pub fn generate_mock_do_now_card() -> Card {
         }),
         created_at: Utc::now(),
         status: CardStatus::Active,
+        metadata: None,
     }
 }
 
@@ -96,6 +97,7 @@ pub fn generate_mock_ship_card() -> Card {
         }),
         created_at: Utc::now(),
         status: CardStatus::Active,
+        metadata: None,
     }
 }
 
@@ -146,6 +148,7 @@ pub fn generate_mock_amplify_card() -> Card {
         origin_object: None,
         created_at: Utc::now(),
         status: CardStatus::Active,
+        metadata: None,
     }
 }
 
@@ -191,6 +194,7 @@ pub fn generate_mock_orient_card() -> Card {
         origin_object: None,
         created_at: Utc::now(),
         status: CardStatus::Active,
+        metadata: None,
     }
 }
 
@@ -209,6 +213,7 @@ pub fn generate_mock_parked_card(original_card_id: Uuid) -> Card {
         origin_object: None,
         created_at: Utc::now(),
         status: CardStatus::Parked,
+        metadata: None,
     }
 }
 
@@ -228,5 +233,6 @@ pub fn generate_mock_breakin_card() -> Card {
         origin_object: None,
         created_at: Utc::now(),
         status: CardStatus::Active,
+        metadata: None,
     }
 }

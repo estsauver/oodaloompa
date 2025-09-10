@@ -10,6 +10,9 @@ pub fn routes() -> Router<AppState> {
 }
 
 // Slack Events API endpoint: verifies signature, handles URL verification, basic message events.
+// Works with both user tokens (xoxp-) and bot tokens (xoxb-)
+// User token events: Fires for everything the user can see
+// Bot token events: Only fires for channels where bot is present
 async fn events(
     State(_state): State<AppState>,
     headers: HeaderMap,

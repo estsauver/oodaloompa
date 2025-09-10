@@ -19,6 +19,15 @@ export const ContextFrame: React.FC<ContextFrameProps> = ({ card }) => {
   // Check if this is a user-generated card from command bar
   const isUserGenerated = card.originObject?.docId === 'command_bar' || 
                          (card.content && 'sender' in card.content && card.content.sender === 'You (Manual Entry)');
+  
+  // Determine the source of the card
+  const cardSource = (() => {
+    if (isUserGenerated) return 'Your Request';
+    if (card.originObject?.docId?.startsWith('gmail_')) return 'Gmail';
+    if (card.originObject?.docId?.startsWith('slack_')) return 'Slack';
+    if (card.originObject?.docId?.startsWith('calendar_')) return 'Calendar';
+    return 'System';
+  })();
 
   // Generate typed context based on card type
   const getTypedContext = (): ContextFrameType | null => {
@@ -36,18 +45,37 @@ export const ContextFrame: React.FC<ContextFrameProps> = ({ card }) => {
           };
         }
         
-        const originalText = (card.content && 'diff' in card.content ? card.content.diff?.before : null) || 
-          'The EFL system leverages MCP connectors with bidirectional IPC channels...';
+        // For Gmail cards, show the actual email preview
+        if (card.originObject?.docId?.startsWith('gmail_')) {
+          const preview = (card.content && 'preview' in card.content) ? card.content.preview : card.title;
+          const intent = (card.content && 'intent' in card.content) ? card.content.intent : null;
+          
+          return {
+            type: 'do_now',
+            data: {
+              originalSnippet: preview.substring(0, 150) + (preview.length > 150 ? '...' : ''),
+              finding: 'Email requires attention',
+              rationale: intent?.rationale || 'Personal email requiring response',
+              sources: [
+                { label: 'Source', value: 'Gmail' },
+                { label: 'Type', value: 'Email' }
+              ]
+            }
+          };
+        }
+        
+        // Fallback for other non-user generated cards
+        const originalText = (card.content && 'diff' in card.content ? card.content.diff?.before : null) || '';
         
         return {
           type: 'do_now',
           data: {
             originalSnippet: originalText.substring(0, 150) + (originalText.length > 150 ? '...' : ''),
-            finding: 'Detected 14 undefined technical acronyms',
-            rationale: 'Technical jargon reduces comprehension for non-technical stakeholders',
+            finding: 'Action required',
+            rationale: 'System-generated task',
             sources: [
-              { label: 'Document', value: 'Product Requirements Doc' },
-              { label: 'Section', value: 'Executive Summary' }
+              { label: 'Source', value: cardSource },
+              { label: 'Type', value: 'Task' }
             ]
           }
         };
@@ -140,13 +168,13 @@ export const ContextFrame: React.FC<ContextFrameProps> = ({ card }) => {
   const renderContext = () => {
     switch (context.type) {
       case 'do_now':
-        return <DoNowContextFrame data={context.data} isUserGenerated={isUserGenerated} />;
+        return <DoNowContextFrame data={context.data} isUserGenerated={isUserGenerated} cardSource={cardSource} />;
       case 'ship':
         return <ShipContextFrame data={context.data} />;
       case 'amplify':
         return <AmplifyContextFrame data={context.data} />;
       case 'orient':
-        return <OrientContextFrame data={context.data} />;
+        return <OrientContextFrame data={context.data} cardSource={cardSource} />;
       case 'break_in':
         return <BreakInContextFrame data={context.data} />;
       case 'parked':
@@ -162,14 +190,14 @@ export const ContextFrame: React.FC<ContextFrameProps> = ({ card }) => {
 };
 
 // Individual context frame renderers
-const DoNowContextFrame: React.FC<{ data: DoNowContext; isUserGenerated: boolean }> = ({ data, isUserGenerated }) => (
+const DoNowContextFrame: React.FC<{ data: DoNowContext; isUserGenerated: boolean; cardSource: string }> = ({ data, isUserGenerated, cardSource }) => (
   <>
     <div className="flex items-start justify-between mb-3">
       <div className="flex items-center gap-2 text-gray-600">
         <Lightbulb className={`w-5 h-5 ${isUserGenerated ? 'text-purple-500' : 'text-yellow-500'}`} />
         <div>
           <h3 className="font-medium text-gray-900">
-            {isUserGenerated ? 'Your Request' : 'AI Suggestion'}
+            {cardSource}
           </h3>
           <p className="text-sm text-gray-500">
             {data.sources?.[0]?.value || 'Context Analysis'}
@@ -276,7 +304,7 @@ const AmplifyContextFrame: React.FC<{ data: AmplifyContext }> = ({ data }) => (
   </>
 );
 
-const OrientContextFrame: React.FC<{ data: OrientContext }> = ({ data }) => (
+const OrientContextFrame: React.FC<{ data: OrientContext; cardSource: string }> = ({ data, cardSource }) => (
   <>
     <div className="flex items-start justify-between mb-3">
       <div className="flex items-center gap-2 text-gray-600">

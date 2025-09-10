@@ -15,6 +15,7 @@ pub struct Card {
     pub origin_object: Option<OriginObject>,
     pub created_at: DateTime<Utc>,
     pub status: CardStatus,
+    pub metadata: Option<CardMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +27,7 @@ pub enum CardType {
     Orient,
     Parked,
     BreakIn,
+    BatchReview,
 }
 
 
@@ -74,6 +76,11 @@ pub enum CardContent {
         message: String,
         sender: String,
         urgency: BreakInUrgency,
+    },
+    #[serde(rename = "batch_review")]
+    BatchReview {
+        emails: Vec<serde_json::Value>,
+        suggested_actions: Vec<String>,
     },
 }
 
@@ -147,6 +154,7 @@ pub struct NextTask {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OriginObject {
     pub doc_id: String,
     pub block_id: Option<String>,
@@ -164,6 +172,12 @@ pub enum CardAction {
     Open,
     GenerateDraft,
     Resume,
+    DeclineRespectfully,
+    ProcessBatch,
+    ExpandToFlow,
+    ArchiveAll,
+    UnsubscribeAll,
+    BlockSender,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,4 +186,14 @@ pub enum BreakInUrgency {
     High,
     Medium,
     Low,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardMetadata {
+    pub email_sender: Option<String>,
+    pub email_subject: Option<String>,
+    pub email_date: Option<String>,
+    pub reply_templates: Option<Vec<String>>,
+    pub email_category: Option<String>,
 }

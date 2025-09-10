@@ -5,19 +5,30 @@ import type { ParkedItem } from '../types';
 export const useDemoFeed = () => {
   const setLoading = useStore(s => s.setLoading);
   const setError = useStore(s => s.setError);
-  const addCard = useStore(s => s.addCard);
   const setParkedItems = useStore(s => s.setParkedItems);
 
   useEffect(() => {
     const loadDemoFeed = async () => {
       setLoading(true);
       try {
-        const response = await fetch('http://localhost:3000/api/v1/feed/demo');
+        // Clear any existing state first
+        useStore.setState({ activeCards: [] });
+        
+        // Add cache buster and no-cache headers
+        const response = await fetch(`http://localhost:3000/api/v1/feed?t=${Date.now()}`, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+          }
+        });
         const data = await response.json();
         
+        console.log('Feed API response:', data);
+        console.log('Number of cards:', data.cards?.length);
+        
         if (data.cards && Array.isArray(data.cards)) {
-          // Clear existing cards and add demo cards
-          data.cards.forEach((card: any) => {
+          // Build array of formatted cards
+          const formattedCards = data.cards.map((card: any) => {
             // Convert snake_case to camelCase for frontend
             let formattedContent = card.content;
             
@@ -89,8 +100,21 @@ export const useDemoFeed = () => {
               createdAt: card.created_at,
               content: formattedContent,
             };
-            addCard(formattedCard);
+            return formattedCard;
           });
+          
+          console.log('Setting formatted cards:', formattedCards);
+          console.log('First card title:', formattedCards[0]?.title);
+          
+          // Replace all cards at once instead of appending
+          useStore.setState({ activeCards: formattedCards });
+          
+          // Verify what's in the store
+          setTimeout(() => {
+            const currentCards = useStore.getState().activeCards;
+            console.log('Cards in store after set:', currentCards.length);
+            console.log('Store cards:', currentCards.map(c => c.title));
+          }, 100);
         }
         
         // Load parked items

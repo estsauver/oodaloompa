@@ -10,6 +10,7 @@ import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 import { useInfiniteStream } from '../hooks/useInfiniteStream';
 import { useAltimeterProgress } from '../hooks/useAltimeterProgress';
 import { useAltimeterKeyboard } from '../hooks/useAltimeterKeyboard';
+import { useSSE } from '../hooks/useSSE';
 import { AlertCircle, ChevronLeft, ChevronRight, Sparkles, SkipForward, Clock, Activity } from 'lucide-react';
 
 export const FlowFeed: React.FC = () => {
@@ -28,8 +29,9 @@ export const FlowFeed: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   
-  useDemoFeed();
-  useInfiniteStream(); // Automatically generate more cards as needed
+  useDemoFeed(); // Load feed data from backend
+  // useInfiniteStream(); // Disabled - no auto-generation
+  // useSSE(); // Temporarily disabled to debug demo data issue
   useAltimeterProgress(); // Calculate and update altimeter progress
   useAltimeterKeyboard(); // Enable keyboard shortcuts for altitude control
 

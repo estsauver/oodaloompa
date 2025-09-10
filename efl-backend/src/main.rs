@@ -22,6 +22,7 @@ use tokio::sync::broadcast;
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: Option<sqlx::PgPool>,
+    pub sqlite_db: Option<sqlite::db::SqliteDb>,
     pub memory_cache: memory::MemoryCache,
     pub parking_service: services::parking::ParkingService,
     pub telemetry_service: services::telemetry::TelemetryService,
@@ -60,6 +61,20 @@ async fn main() -> anyhow::Result<()> {
         }
     };
     
+    // Connect to SQLite
+    let sqlite_url = std::env::var("SQLITE_URL")
+        .unwrap_or_else(|_| "sqlite://app.db".to_string());
+    let sqlite_db = match sqlite::db::SqliteDb::connect(&sqlite_url).await {
+        Ok(db) => {
+            tracing::info!("SQLite connected: {}", sqlite_url);
+            Some(db)
+        }
+        Err(e) => {
+            tracing::warn!("SQLite connection failed: {}", e);
+            None
+        }
+    };
+    
     let memory_cache = memory::MemoryCache::new();
     let parking_service = services::parking::ParkingService::new();
     let telemetry_service = services::telemetry::TelemetryService::new();
@@ -73,6 +88,7 @@ async fn main() -> anyhow::Result<()> {
     
     let app_state = AppState {
         db_pool,
+        sqlite_db,
         memory_cache,
         parking_service,
         telemetry_service,
@@ -106,6 +122,7 @@ fn api_routes() -> Router<AppState> {
         .nest("/slack", handlers::slack::routes())
         .nest("/slack-map", handlers::slack_map::routes())
         .nest("/gmail", handlers::gmail::routes())
+        .nest("/auth", handlers::oauth::routes())
         .nest("/memory", handlers::memory::routes())
         .nest("/trace", handlers::trace::routes())
         .nest("/telemetry", handlers::telemetry::routes())

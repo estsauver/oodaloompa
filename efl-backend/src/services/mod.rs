@@ -7,3 +7,4 @@ pub mod mock_data;
 pub mod parking;
 pub mod telemetry;
 pub mod altimeter;
+pub mod gmail_cards;

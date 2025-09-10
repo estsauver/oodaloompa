@@ -36,6 +36,7 @@ hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
 regex = "1"
+urlencoding = "2.1"
 
 # MCP Protocol Support
 async-trait = "0.1"

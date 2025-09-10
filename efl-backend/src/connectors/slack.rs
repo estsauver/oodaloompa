@@ -51,6 +51,9 @@ impl SlackConnector for MCPSlackConnector {
 }
 
 // Simple Web API client for Slack
+// Supports both user tokens (xoxp-) and bot tokens (xoxb-)
+// User tokens: See everything the installing user can see, no channel invites needed
+// Bot tokens: Require bot to be invited to channels, good for workspace-wide installations
 #[derive(Clone)]
 pub struct SlackClient {
     pub client: Client,
@@ -59,9 +62,13 @@ pub struct SlackClient {
 
 impl SlackClient {
     pub fn from_env() -> Option<Self> {
+        // Try user token first (for personal installations), then bot token
+        let token = std::env::var("SLACK_USER_TOKEN")
+            .or_else(|_| std::env::var("SLACK_BOT_TOKEN"))
+            .ok()?;
         Some(Self {
             client: Client::new(),
-            token: std::env::var("SLACK_BOT_TOKEN").ok()?,
+            token,
         })
     }
 

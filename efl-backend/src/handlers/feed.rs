@@ -34,7 +34,10 @@ async fn get_feed(
     State(state): State<AppState>,
     Query(params): Query<FeedQuery>,
 ) -> impl IntoResponse {
-    let service = crate::services::feed::FeedService::new(state.db_pool.clone());
+    let service = crate::services::feed::FeedService::new_with_sqlite(
+        state.db_pool.clone(),
+        state.sqlite_db.as_ref().map(|db| db.pool.clone())
+    );
     let limit = params.limit.unwrap_or(10);
     
     match service.get_feed(params.altitude, limit).await {

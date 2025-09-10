@@ -92,9 +92,34 @@ async fn park_card(
     Path(id): Path<Uuid>,
     Json(req): Json<ParkRequest>,
 ) -> impl IntoResponse {
-    // For demo, create a mock card to park
-    use crate::services::mock_data::generate_mock_do_now_card;
-    let card = generate_mock_do_now_card();
+    // Get the actual card to park
+    // For now, since we don't have real card persistence, create a minimal card
+    // In production, we'd fetch the real card from the database
+    let card = Card {
+        id,
+        card_type: crate::models::CardType::DoNow,
+        altitude: crate::models::Altitude::Do,
+        title: format!("Card {}", id),
+        content: crate::models::CardContent::DoNow {
+            intent: crate::models::Intent {
+                id: Uuid::new_v4(),
+                name: "Parked task".to_string(),
+                description: "Task that was parked".to_string(),
+                intent_type: crate::models::IntentType::Operate,
+                rationale: "Parked for later".to_string(),
+                preconditions: vec![],
+                estimated_tokens: 0,
+                created_at: chrono::Utc::now(),
+            },
+            preview: "Parked card".to_string(),
+            diff: None,
+        },
+        actions: vec![],
+        origin_object: None,
+        created_at: chrono::Utc::now(),
+        status: crate::models::CardStatus::Active,
+        metadata: None,
+    };
     
     let reason = req.reason.unwrap_or_else(|| "Parked for later".to_string());
     match state.parking_service.park_card(card, req.wake_time, reason).await {

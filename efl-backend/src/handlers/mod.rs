@@ -9,4 +9,5 @@ pub mod health_db;
 pub mod stream;
 pub mod slack;
 pub mod gmail;
+pub mod oauth;
 pub mod slack_map;

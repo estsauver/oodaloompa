@@ -1,14 +1,20 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, SqlitePool};
 use anyhow::Result;
 use crate::models::{Card, Altitude};
+use crate::services::gmail_cards::GmailCardService;
 
 pub struct FeedService {
     db_pool: Option<PgPool>,
+    sqlite_pool: Option<SqlitePool>,
 }
 
 impl FeedService {
     pub fn new(db_pool: Option<PgPool>) -> Self {
-        Self { db_pool }
+        Self { db_pool, sqlite_pool: None }
+    }
+    
+    pub fn new_with_sqlite(db_pool: Option<PgPool>, sqlite_pool: Option<SqlitePool>) -> Self {
+        Self { db_pool, sqlite_pool }
     }
     
     pub async fn get_feed(
@@ -16,12 +22,37 @@ impl FeedService {
         altitude: Option<Altitude>,
         limit: usize,
     ) -> Result<serde_json::Value> {
-        // In a real implementation, fetch cards from database
-        let cards: Vec<Card> = vec![];
+        let mut all_cards: Vec<Card> = vec![];
+        
+        // Fetch Gmail cards if available
+        if self.sqlite_pool.is_some() {
+            let mut gmail_service = GmailCardService::new(self.sqlite_pool.clone()).await;
+            if let Ok(gmail_cards) = gmail_service.fetch_gmail_cards(limit as u32).await {
+                all_cards.extend(gmail_cards);
+            }
+        }
+        
+        // Sort by altitude (Do > Ship > Amplify > Orient)
+        all_cards.sort_by(|a, b| {
+            use crate::models::Altitude;
+            let altitude_priority = |alt: &Altitude| -> u8 {
+                match alt {
+                    Altitude::Do => 4,
+                    Altitude::Ship => 3,
+                    Altitude::Amplify => 2,
+                    Altitude::Orient => 1,
+                }
+            };
+            altitude_priority(&b.altitude).cmp(&altitude_priority(&a.altitude))
+        });
+        
+        // Apply limit
+        all_cards.truncate(limit);
+        
         let current_altitude = altitude.unwrap_or(Altitude::Do);
         
         Ok(serde_json::json!({
-            "cards": cards,
+            "cards": all_cards,
             "current_altitude": current_altitude,
             "parked_count": 0
         }))

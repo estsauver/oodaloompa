@@ -37,6 +37,15 @@ export interface Card {
   originObject?: OriginObject;
   createdAt: string;
   status: CardStatus;
+  metadata?: CardMetadata;
+}
+
+export interface CardMetadata {
+  emailSender?: string;
+  emailSubject?: string;
+  emailDate?: string;
+  replyTemplates?: string[];
+  emailCategory?: string;
 }
 
 export interface OriginObject {

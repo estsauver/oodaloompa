@@ -189,6 +189,7 @@ mod tests {
             origin_object: None,
             created_at: Utc::now(),
             status: CardStatus::Active,
+        metadata: None,
         };
         
         let wake_time = Utc::now() + chrono::Duration::hours(1);

@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use crate::sqlite::oauth::OAuthToken;
+use sqlx::SqlitePool;
 
 #[derive(Clone)]
 pub struct GmailClient {
@@ -7,6 +9,7 @@ pub struct GmailClient {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     pub refresh_token: Option<String>,
+    pub sqlite_pool: Option<SqlitePool>,
 }
 
 impl GmailClient {
@@ -16,7 +19,25 @@ impl GmailClient {
             client_id: std::env::var("GMAIL_CLIENT_ID").ok(),
             client_secret: std::env::var("GMAIL_CLIENT_SECRET").ok(),
             refresh_token: std::env::var("GMAIL_REFRESH_TOKEN").ok(),
+            sqlite_pool: None,
         }
+    }
+    
+    pub async fn from_env_with_db(pool: Option<SqlitePool>) -> Self {
+        let mut client = Self::from_env();
+        client.sqlite_pool = pool.clone();
+        
+        // Try to load refresh token from database if not in env
+        if client.refresh_token.is_none() {
+            if let Some(pool) = &pool {
+                if let Ok(Some(token)) = OAuthToken::get_refresh_token("gmail", pool).await {
+                    tracing::info!("Loaded Gmail refresh token from database");
+                    client.refresh_token = Some(token);
+                }
+            }
+        }
+        
+        client
     }
 
     async fn ensure_access_token(&mut self) -> Result<String> {
@@ -74,7 +95,33 @@ impl GmailClient {
             .map_err(|e| anyhow!("gmail get http: {e}"))?;
         if !resp.status().is_success() { return Err(anyhow!("gmail get failed: {}", resp.status())); }
         let msg: MsgOut = resp.json().await.map_err(|e| anyhow!("gmail get parse: {e}"))?;
-        Ok(GmailMessage { id: msg.id, thread_id: msg.threadId, snippet: msg.snippet })
+        
+        // Extract headers if available
+        let mut sender = String::new();
+        let mut subject = String::new();
+        let mut date = String::new();
+        
+        if let Some(payload) = msg.payload {
+            if let Some(headers) = payload.headers {
+                for header in headers {
+                    match header.name.as_str() {
+                        "From" => sender = header.value,
+                        "Subject" => subject = header.value,
+                        "Date" => date = header.value,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        
+        Ok(GmailMessage { 
+            id: msg.id, 
+            thread_id: msg.threadId, 
+            snippet: msg.snippet,
+            sender,
+            subject,
+            date,
+        })
     }
 }
 
@@ -89,5 +136,12 @@ pub struct GmailHeader { pub name: String, pub value: String }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GmailMessage { pub id: String, pub thread_id: String, pub snippet: String }
+pub struct GmailMessage { 
+    pub id: String, 
+    pub thread_id: String, 
+    pub snippet: String,
+    pub sender: String,
+    pub subject: String,
+    pub date: String,
+}
 

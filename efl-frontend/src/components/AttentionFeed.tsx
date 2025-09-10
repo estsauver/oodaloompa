@@ -13,7 +13,7 @@ export const AttentionFeed: React.FC = () => {
   const showTrace = useStore(s => s.showTrace);
   const isLoading = useStore(s => s.isLoading);
   const error = useStore(s => s.error);
-  useDemoFeed();
+  // useDemoFeed(); // Disabled - using real data only
 
   return (
     <div className="flex h-screen bg-gray-50">
