@@ -27,14 +27,14 @@ pub async fn post_intents(State(_app): State<AppState>, Json(body): Json<Intents
         body.dod_json,
         body.recent_json
     );
-    // Use mock provider for offline dev; swap to real provider with env
     // Use DSPy provider by default, unless explicitly disabled
-    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
-        Box::new(llm::providers::dspy::DspyProvider::new())
+    let out: Result<IntentsResp, _> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        let provider = llm::providers::dspy::DspyProvider::new();
+        provider.json(system, &user).await
     } else {
-        Box::new(llm::providers::mock::MockProvider)
+        let provider = llm::providers::mock::MockProvider;
+        provider.json(system, &user).await
     };
-    let out: Result<IntentsResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
         Err(_) => StatusCode::BAD_GATEWAY.into_response(),
@@ -51,12 +51,13 @@ pub async fn post_transform_simplify(State(_app): State<AppState>, Json(body): J
     let system = include_str!("../llm/prompts/transform_simplify.md");
     let user = format!("{}", body.snippet);
     // Use DSPy provider by default, unless explicitly disabled
-    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
-        Box::new(llm::providers::dspy::DspyProvider::new())
+    let out: Result<SimplifyResp, _> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        let provider = llm::providers::dspy::DspyProvider::new();
+        provider.json(system, &user).await
     } else {
-        Box::new(llm::providers::mock::MockProvider)
+        let provider = llm::providers::mock::MockProvider;
+        provider.json(system, &user).await
     };
-    let out: Result<SimplifyResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
         Err(_) => StatusCode::BAD_GATEWAY.into_response(),
@@ -73,12 +74,13 @@ pub async fn post_amplify_draft(State(_app): State<AppState>, Json(_body): Json<
     let system = include_str!("../llm/prompts/amplify_draft.md");
     let user = String::from("Generate drafts");
     // Use DSPy provider by default, unless explicitly disabled
-    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
-        Box::new(llm::providers::dspy::DspyProvider::new())
+    let out: Result<AmplifyResp, _> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        let provider = llm::providers::dspy::DspyProvider::new();
+        provider.json(system, &user).await
     } else {
-        Box::new(llm::providers::mock::MockProvider)
+        let provider = llm::providers::mock::MockProvider;
+        provider.json(system, &user).await
     };
-    let out: Result<AmplifyResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
         Err(_) => StatusCode::BAD_GATEWAY.into_response(),
@@ -95,12 +97,13 @@ pub async fn post_orient_rank(State(_app): State<AppState>, Json(_body): Json<Or
     let system = include_str!("../llm/prompts/orient_ranking.md");
     let user = String::from("Rank tasks");
     // Use DSPy provider by default, unless explicitly disabled
-    let provider: Box<dyn llm::LlmProvider> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
-        Box::new(llm::providers::dspy::DspyProvider::new())
+    let out: Result<OrientResp, _> = if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) != "false" {
+        let provider = llm::providers::dspy::DspyProvider::new();
+        provider.json(system, &user).await
     } else {
-        Box::new(llm::providers::mock::MockProvider)
+        let provider = llm::providers::mock::MockProvider;
+        provider.json(system, &user).await
     };
-    let out: Result<OrientResp, _> = provider.json(system, &user).await;
     match out {
         Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
         Err(_) => StatusCode::BAD_GATEWAY.into_response(),

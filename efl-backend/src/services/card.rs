@@ -73,6 +73,7 @@ impl CardService {
                         CardType::Orient => "Orient",
                         CardType::Parked => "Parked",
                         CardType::BreakIn => "BreakIn",
+                        CardType::BatchReview => "BatchReview",
                     };
                     let state = match card.status {
                         CardStatus::Active => "Active",

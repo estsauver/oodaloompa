@@ -20,7 +20,23 @@ export const Card: React.FC<CardProps> = ({ card, showContext = true }) => {
   
   const handleCardAction = (action: string, data?: any) => {
     console.log('Card action:', action, data);
-    // TODO: Implement actual action handlers
+    
+    // Handle Gmail-specific actions
+    if (action === 'open' && isGmailCard) {
+      // Extract Gmail message ID from origin_object.doc_id (format: "gmail_<messageId>")
+      const messageId = card.originObject?.docId?.replace('gmail_', '');
+      
+      if (messageId) {
+        // Open Gmail in a new tab with the message
+        const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${messageId}`;
+        window.open(gmailUrl, '_blank');
+      } else {
+        console.warn('No Gmail message ID found for this card');
+      }
+      return;
+    }
+    
+    // TODO: Implement other action handlers
   };
   
   const renderCardContent = () => {
