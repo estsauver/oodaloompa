@@ -12,7 +12,28 @@ This guide walks you through configuring the backend and frontend, wiring Slack 
 - Frontend: `efl-frontend` (React + TS + Zustand)
 
 **Backend Setup (SQLite + SSE)**
-- Create SQLite file (or ensure path exists): `cd efl-backend && : > app.db`
+- Create SQLite file (or ensure path exists). In the terminal, do:
+  ```sh
+  cd efl-backend
+  sqlite3 app.db <<'SQL'
+  CREATE TABLE IF NOT EXISTS oauth_tokens (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    service       TEXT NOT NULL,
+    user_id       TEXT NOT NULL,
+    access_token  TEXT,
+    refresh_token TEXT,
+    expires_at    TEXT,
+    scopes        TEXT,
+    created_at    TEXT DEFAULT (datetime('now')),
+    updated_at    TEXT DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_unique
+    ON oauth_tokens(service, user_id);
+  SQL
+
+  DATABASE_URL=sqlite://app.db SQLITE_URL=sqlite://app.db \
+  SLACK_SIGNING_SECRET=dev-skip RUST_LOG=info cargo run
+  ```
 - Start backend: `DATABASE_URL=sqlite://app.db SQLITE_URL=sqlite://app.db RUST_LOG=info cargo run`
 - Health: `curl -s http://localhost:3000/api/v1/health/db` → `{ "db": "sqlite", "ok": true }`
 - SSE verify: `curl -N http://localhost:3000/api/v1/stream/cards` → initial `queue.hydrate` and periodic `altimeter.update`.
