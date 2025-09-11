@@ -6,6 +6,8 @@ use crate::models::{
     OriginObject, BreakInUrgency, Intent, IntentType, NextTask, CardMetadata
 };
 use crate::connectors::gmail::{GmailClient, GmailMessage};
+use serde::{Deserialize, Serialize};
+use reqwest::Client;
 use sqlx::SqlitePool;
 
 #[derive(Debug, Clone)]
@@ -35,19 +37,33 @@ impl GmailCardService {
         let mut low_priority_emails = Vec::new();
         
         for msg in messages {
-            let category = self.categorize_email(&msg);
-            let has_unsubscribe = self.detect_unsubscribe_link(&msg);
+            // Prefer DSPy classification; fall back to heuristic
+            let dspy_class = self.classify_with_dspy(&msg).await.ok().flatten();
+            let (category, card_hint, interaction_mode) = match &dspy_class {
+                Some(dc) => (
+                    Self::map_label_to_category(&dc.category_label),
+                    Some(dc.card_type.clone()),
+                    Some(dc.interaction_mode.clone()),
+                ),
+                None => (self.categorize_email(&msg), None, None),
+            };
+            let has_unsubscribe = dspy_class
+                .as_ref()
+                .map(|d| d.unsubscribe_detected)
+                .unwrap_or_else(|| self.detect_unsubscribe_link(&msg));
             
             match category {
                 EmailCategory::Personal => {
                     // Personal emails always go to main flow
-                    let card = self.convert_to_card(msg, &category);
+                    let card = self.convert_to_card_with_class(msg, &category, dspy_class.as_ref(), card_hint.as_deref());
                     high_priority_cards.push(card);
                 },
                 EmailCategory::Sales => {
                     // Sales emails that need a decision
-                    if self.is_relevant_sales(&msg) {
-                        let card = self.convert_to_card(msg, &category);
+                    if interaction_mode.as_deref() == Some("batch_review") {
+                        low_priority_emails.push((msg, category, has_unsubscribe));
+                    } else if self.is_relevant_sales(&msg) {
+                        let card = self.convert_to_card_with_class(msg, &category, dspy_class.as_ref(), card_hint.as_deref());
                         high_priority_cards.push(card);
                     } else {
                         low_priority_emails.push((msg, category, has_unsubscribe));
@@ -140,6 +156,59 @@ impl GmailCardService {
                 email_date: if message.date.is_empty() { None } else { Some(message.date.clone()) },
                 reply_templates: Some(reply_templates),
                 email_category: Some(format!("{:?}", category)),
+            }),
+        }
+    }
+
+    fn convert_to_card_with_class(&self, message: GmailMessage, category: &EmailCategory, class: Option<&DspyEmailClass>, card_hint: Option<&str>) -> Card {
+        let (mut card_type, mut altitude) = self.determine_card_type(&message, category);
+        if let Some(hint) = card_hint {
+            // Trust DSPy card type mapping if provided
+            match hint {
+                "BreakIn" => { card_type = CardType::BreakIn; altitude = Altitude::Do; },
+                "DoNow" => { card_type = CardType::DoNow; altitude = Altitude::Do; },
+                "Orient" => { card_type = CardType::Orient; altitude = Altitude::Orient; },
+                "Ship" => { card_type = CardType::Ship; altitude = Altitude::Ship; },
+                "Amplify" => { card_type = CardType::Amplify; altitude = Altitude::Amplify; },
+                _ => {}
+            }
+        }
+
+        let title = self.extract_title(&message, category);
+        let mut content = self.create_card_content(&message, &card_type, category);
+        let mut actions = self.determine_actions(&card_type, category);
+        let mut reply_templates = self.generate_reply_templates(&message, category);
+
+        // If DSPy suggested replies exist, prefer them
+        if let Some(c) = class {
+            if !c.suggested_replies.is_empty() { reply_templates = c.suggested_replies.clone(); }
+            // Optionally adjust actions based on user_action
+            if let Some(a) = Self::map_user_action_to_action(&c.user_action) {
+                if !actions.contains(&a) { actions.push(a); }
+            }
+        }
+
+        Card {
+            id: Uuid::new_v4(),
+            card_type,
+            altitude,
+            title,
+            content,
+            actions,
+            origin_object: Some(OriginObject {
+                doc_id: format!("gmail_{}", message.id),
+                block_id: Some(message.thread_id.clone()),
+            }),
+            created_at: Utc::now(),
+            status: CardStatus::Active,
+            metadata: Some(CardMetadata {
+                email_sender: Some(self.extract_sender_name(&message)),
+                email_subject: if message.subject.is_empty() { None } else { Some(message.subject.clone()) },
+                email_date: if message.date.is_empty() { None } else { Some(message.date.clone()) },
+                reply_templates: Some(reply_templates),
+                email_category: class
+                    .map(|c| c.category_label.clone())
+                    .or_else(|| Some(format!("{:?}", category)))
             }),
         }
     }
@@ -518,6 +587,76 @@ impl GmailCardService {
             EmailCategory::Newsletter => "Newsletter for optional reading".to_string(),
             EmailCategory::Notification => "Automated notification".to_string(),
             EmailCategory::Spam => "Low-value email".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DspyEmailClass {
+    interaction_mode: String,
+    user_action: String,
+    #[serde(default)]
+    context_needs: Vec<String>,
+    category_label: String,
+    card_type: String,
+    altitude: String,
+    #[serde(default)]
+    urgency: f32,
+    #[serde(default)]
+    impact: f32,
+    rationale: String,
+    #[serde(default)]
+    suggested_replies: Vec<String>,
+    #[serde(default)]
+    unsubscribe_detected: bool,
+}
+
+impl GmailCardService {
+    async fn classify_with_dspy(&self, message: &GmailMessage) -> Result<Option<DspyEmailClass>> {
+        // Allow disabling via env
+        if std::env::var("USE_DSPY").unwrap_or_else(|_| "true".to_string()) == "false" {
+            return Ok(None);
+        }
+        let base = std::env::var("DSPY_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8001".into());
+        let url = format!("{}/email/classify", base);
+        let client = Client::new();
+        let body = serde_json::json!({
+            "subject": message.subject,
+            "snippet": message.snippet,
+            "sender": message.sender,
+            "metadata": { }
+        });
+        let resp = client.post(&url).json(&body).send().await
+            .map_err(|e| anyhow::anyhow!("dspy http: {}", e))?;
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+        let parsed: DspyEmailClass = resp.json().await
+            .map_err(|e| anyhow::anyhow!("dspy parse: {}", e))?;
+        Ok(Some(parsed))
+    }
+
+    fn map_label_to_category(label: &str) -> EmailCategory {
+        match label.to_lowercase().as_str() {
+            "personal" => EmailCategory::Personal,
+            "sales" => EmailCategory::Sales,
+            "newsletter" => EmailCategory::Newsletter,
+            "notification" => EmailCategory::Notification,
+            "spam" => EmailCategory::Spam,
+            _ => EmailCategory::Notification,
+        }
+    }
+
+    fn map_user_action_to_action(user_action: &str) -> Option<CardAction> {
+        match user_action {
+            "reply" => Some(CardAction::Open),
+            "create_task" => Some(CardAction::Open),
+            "schedule_meeting" => Some(CardAction::Open),
+            "notify_stakeholders" => Some(CardAction::Open),
+            "read_later" => Some(CardAction::Park),
+            "park" => Some(CardAction::Park),
+            _ => None,
         }
     }
 }

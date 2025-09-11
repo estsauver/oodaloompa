@@ -101,6 +101,33 @@ POST /interrupt/triage
 GET /health
 ```
 
+### Classify Email
+```bash
+POST /email/classify
+{
+  "subject": "Quick check-in on the launch",
+  "snippet": "Hey, can you approve the final copy by EOD?",
+  "sender": "Alex <alex@company.com>",
+  "thread_summary": "Prior thread discussed launch blockers",
+  "metadata": { "has_unsubscribe": false }
+}
+
+Response
+{
+  "interactionMode": "respond_now",
+  "userAction": "reply",
+  "contextNeeds": ["thread_history"],
+  "categoryLabel": "personal",
+  "cardType": "DoNow",
+  "altitude": "Do",
+  "urgency": 0.82,
+  "impact": 0.7,
+  "rationale": "Direct request with time-bound ask from stakeholder",
+  "suggestedReplies": ["Got it—approving now.", "Reviewing; will confirm within 1 hour."],
+  "unsubscribeDetected": false
+}
+```
+
 ## DSPy Modules
 
 The service uses several DSPy modules for intelligent processing:

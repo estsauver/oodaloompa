@@ -46,7 +46,7 @@ To set up Slack:
 See [DOGFOOD_SETUP.md](./DOGFOOD_SETUP.md) for detailed setup instructions.
 
 ### Future Integrations
-- Gmail/Email
+- Gmail/Email (LLM triage via DSPy)
 - Calendar
 - GitHub
 - Linear/Jira
@@ -71,6 +71,9 @@ Backend environment variables:
 DATABASE_URL=sqlite://app.db  # or postgres://...
 SLACK_USER_TOKEN=xoxp-...     # For personal Slack access
 SLACK_SIGNING_SECRET=...       # Or 'dev-skip' for local dev
+# LLM integration (optional)
+USE_DSPY=true                  # Enable DSPy routing from backend
+DSPY_SERVICE_URL=http://localhost:8001
 ```
 
 ## Documentation

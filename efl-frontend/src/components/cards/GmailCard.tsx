@@ -7,6 +7,13 @@ interface GmailCardProps {
   onAction: (action: string, data?: any) => void;
 }
 
+// Helper function to decode HTML entities
+const decodeHtmlEntities = (text: string): string => {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+};
+
 export const GmailCard: React.FC<GmailCardProps> = ({ card, onAction }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -19,13 +26,14 @@ export const GmailCard: React.FC<GmailCardProps> = ({ card, onAction }) => {
   // Extract email metadata
   const metadata = card.metadata;
   const sender = metadata?.emailSender || 'Unknown Sender';
-  const subject = metadata?.emailSubject || card.title;
+  const subject = decodeHtmlEntities(metadata?.emailSubject || card.title);
   const date = metadata?.emailDate ? new Date(metadata.emailDate).toLocaleString() : '';
   const replyTemplates = metadata?.replyTemplates || [];
   const category = metadata?.emailCategory || 'Email';
   
-  // Extract preview from content
-  const preview = card.content?.type === 'do_now' ? card.content.preview : card.title;
+  // Extract preview from content and decode HTML entities
+  const rawPreview = card.content?.type === 'do_now' ? card.content.preview : card.title;
+  const preview = decodeHtmlEntities(rawPreview);
   
   // Parse sender to get name and email
   const parseSender = (senderStr: string) => {

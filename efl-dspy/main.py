@@ -117,6 +117,31 @@ class TriageResponse(BaseModel):
     reasoning: str = Field(..., description="Why this triage decision was made")
     suggested_response: Optional[str] = Field(None, description="Draft response if applicable")
 
+# Email classification
+class EmailClassificationRequest(BaseModel):
+    """Request to classify an email by interaction mode, context needs, and user action"""
+    subject: str = Field("", description="Email subject")
+    snippet: str = Field(..., description="Email preview/body snippet")
+    sender: str = Field("", description="From header as displayed")
+    to: Optional[List[str]] = Field(None, description="To recipients")
+    cc: Optional[List[str]] = Field(None, description="CC recipients")
+    thread_summary: Optional[str] = Field(None, description="Short summary of prior thread if known")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Misc metadata (labels, has_unsubscribe, etc.)")
+
+class EmailClassificationResponse(BaseModel):
+    """Structured classification for routing email into the flow"""
+    interaction_mode: str = Field(..., description="respond_now | respond_at_break | park | archive | unsubscribe | delegate | schedule | batch_review")
+    user_action: str = Field(..., description="reply | create_task | schedule_meeting | update_doc | notify_stakeholders | read_later | park")
+    context_needs: List[str] = Field(default_factory=list, description="thread_history | doc_context | calendar_availability | stakeholder_map | attachments | crm | prior_decisions")
+    category_label: str = Field(..., description="presentation label: personal | sales | newsletter | notification | update | spam")
+    card_type: str = Field(..., description="DoNow | BreakIn | Orient | Ship | Amplify | BatchReview")
+    altitude: str = Field(..., description="Do | Ship | Amplify | Orient")
+    urgency: float = Field(0.5, description="0-1 urgency estimate")
+    impact: float = Field(0.5, description="0-1 impact estimate")
+    rationale: str = Field(..., description="Reasoning for the classification")
+    suggested_replies: List[str] = Field(default_factory=list, description="Optional reply templates")
+    unsubscribe_detected: bool = Field(False, description="Whether unsubscribe pattern was detected")
+
 
 # ====================
 # DSPy Signatures
@@ -158,6 +183,29 @@ class InterruptTriage(dspy.Signature):
     urgency = dspy.OutputField(desc="Urgency score 0-1")
     impact = dspy.OutputField(desc="Impact score 0-1")
     reasoning = dspy.OutputField(desc="Why this triage decision was made")
+
+class EmailClassification(dspy.Signature):
+    """Classify an email to drive next action and context needs.
+
+    Consider: who sent it, whether it's a direct ask vs broadcast, urgency/impact, and
+    what context would produce a high-quality response. Map to EFL altitudes and card types.
+    """
+    subject = dspy.InputField(desc="Email subject line")
+    snippet = dspy.InputField(desc="Email preview/body snippet")
+    sender = dspy.InputField(desc="Sender display name/email")
+    thread_summary = dspy.InputField(desc="Short summary of prior thread if any")
+
+    interaction_mode = dspy.OutputField(desc="respond_now | respond_at_break | park | archive | unsubscribe | delegate | schedule | batch_review")
+    user_action = dspy.OutputField(desc="reply | create_task | schedule_meeting | update_doc | notify_stakeholders | read_later | park")
+    context_needs = dspy.OutputField(desc="JSON array: thread_history | doc_context | calendar_availability | stakeholder_map | attachments | crm | prior_decisions")
+    category_label = dspy.OutputField(desc="personal | sales | newsletter | notification | update | spam")
+    card_type = dspy.OutputField(desc="DoNow | BreakIn | Orient | Ship | Amplify | BatchReview")
+    altitude = dspy.OutputField(desc="Do | Ship | Amplify | Orient")
+    urgency = dspy.OutputField(desc="0-1 urgency")
+    impact = dspy.OutputField(desc="0-1 impact")
+    rationale = dspy.OutputField(desc="Reasoning for this classification")
+    suggested_replies = dspy.OutputField(desc="JSON array of suggested reply templates if applicable")
+    unsubscribe_detected = dspy.OutputField(desc="true/false if unsubscribe likely")
 
 
 # ====================
@@ -214,11 +262,27 @@ class InterruptTriager(dspy.Module):
         )
         return result
 
+class EmailClassifier(dspy.Module):
+    """Classify emails per EFL product vision (OODA-aligned)"""
+
+    def __init__(self):
+        super().__init__()
+        self.prog = dspy.ChainOfThought(EmailClassification)
+
+    def forward(self, subject: str, snippet: str, sender: str = "", thread_summary: str = ""):
+        return self.prog(
+            subject=subject or "",
+            snippet=snippet,
+            sender=sender or "",
+            thread_summary=thread_summary or ""
+        )
+
 
 # Initialize DSPy modules
 intent_generator = IntentGenerator()
 card_generator = CardGenerator()
 interrupt_triager = InterruptTriager()
+email_classifier = EmailClassifier()
 
 
 # ====================
@@ -364,6 +428,56 @@ async def triage_interrupt(request: BreakInTriageRequest):
         
     except Exception as e:
         logger.error(f"Error triaging interrupt: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/email/classify", response_model=EmailClassificationResponse)
+async def classify_email(request: EmailClassificationRequest):
+    """Classify an email into interaction bin, context needs, and EFL card mapping"""
+    try:
+        logger.info(f"Classifying email from {request.sender} with subject '{request.subject}'")
+        result = email_classifier(
+            subject=request.subject,
+            snippet=request.snippet,
+            sender=request.sender or "",
+            thread_summary=request.thread_summary or ""
+        )
+
+        import json
+        def parse_list(x):
+            if isinstance(x, list):
+                return x
+            try:
+                return json.loads(x)
+            except Exception:
+                return []
+        def parse_bool(x):
+            if isinstance(x, bool):
+                return x
+            return str(x).strip().lower() in {"true","1","yes"}
+        def parse_float(x, default=0.5):
+            try:
+                return float(x)
+            except Exception:
+                return default
+
+        response = EmailClassificationResponse(
+            interaction_mode=result.interaction_mode,
+            user_action=result.user_action,
+            context_needs=parse_list(result.context_needs),
+            category_label=result.category_label,
+            card_type=result.card_type,
+            altitude=result.altitude,
+            urgency=parse_float(result.urgency, 0.5),
+            impact=parse_float(result.impact, 0.5),
+            rationale=result.rationale,
+            suggested_replies=parse_list(result.suggested_replies),
+            unsubscribe_detected=parse_bool(result.unsubscribe_detected),
+        )
+
+        logger.info(f"Email classified: {response.card_type}/{response.interaction_mode}")
+        return response
+    except Exception as e:
+        logger.error(f"Error classifying email: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/context/preflight")
