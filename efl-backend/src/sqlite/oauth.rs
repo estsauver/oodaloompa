@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct OAuthToken {
     pub id: Option<i64>,
     pub service: String,
-    pub user_id: Option<String>,
+    pub user_id: String,
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     pub expires_at: Option<String>, // Store as ISO string for simplicity
